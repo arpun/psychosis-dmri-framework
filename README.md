@@ -50,7 +50,7 @@ Run notebooks in numerical order. Each notebook is self-contained and generates 
 | # | Notebook | Purpose | Manuscript Section | Figures / Tables |
 |---|----------|---------|-------------------|------------------|
 | 1 | `01_noise_testing` | Rician noise sensitivity analysis; evaluates IVIM fitting accuracy across SNR 5--80 dB | Sec.2.2 | Supplemental |
-| 2 | `02_bias_testing` | **Part A** — IVIM model fitting sweep on synthetic data; quantifies bias in volume fractions and DTI/DKI metrics across ground-truth compositions. **Part B** — Noise-induced bias visualization (Table 2, box plots, heatmaps, line plots, summary tables) | Sec.2.2 | Supplemental, Tables 2 |
+| 2 | `02_bias_testing` | IVIM fitting bias analysis on synthetic data (Part A) with noise-induced bias visualization (Part B, Table 2) | Sec.2.2 | Supplemental, Tables 2 |
 | 3 | `03_data_preparation` | Load data, impute missing values, map diagnoses, apply ComBat harmonization | Sec.3.1, 3.2, 3.4.4 | -- (preprocessing) |
 | 4 | `04_pca_confound_analysis` | PCA analysis stratified by sex, site, handedness to confirm confounds do not drive variance | Sec.4.2 | Figure 4 |
 | 5 | `05_statistical_feature_analysis` | KS tests, Mann-Whitney U, Cohen's d per feature; distribution plots for top discriminators | Sec.4.3-4.4 | Supplemental |
