@@ -18,8 +18,16 @@ ENV/
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
 
-# Data & artifacts
+# Data & intermediate files
 data/finaldata.csv
 data/*.pkl
 data/*.txt
 *.log
+
+# Generated figures
+figures/
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.pdf
