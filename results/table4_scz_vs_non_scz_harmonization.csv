@@ -1,0 +1,7 @@
+Task,CV Strategy,ComBat,AUC-ROC,Avg Precision
+SCZ vs Non-SCZ,Standard 5-Fold,No,0.640 +/- 0.043,0.737 +/- 0.046
+SCZ vs Non-SCZ,Standard 5-Fold,Yes,0.652 +/- 0.044,0.745 +/- 0.045
+SCZ vs Non-SCZ,Site-Stratified 5-Fold,No,0.582 +/- 0.047,0.680 +/- 0.050
+SCZ vs Non-SCZ,Site-Stratified 5-Fold,Yes,0.516 +/- 0.047,0.640 +/- 0.052
+SCZ vs Non-SCZ,Leave-One-Site-Out,No,0.644 +/- 0.041,0.740 +/- 0.042
+SCZ vs Non-SCZ,Leave-One-Site-Out,Yes,0.615 +/- 0.045,0.668 +/- 0.052

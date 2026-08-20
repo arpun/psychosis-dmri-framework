@@ -1,0 +1,7 @@
+Task,CV Strategy,ComBat,AUC-ROC,Avg Precision
+Patient vs Control,Standard 5-Fold,No,1.000 +/- 0.000,1.000 +/- 0.000
+Patient vs Control,Standard 5-Fold,Yes,1.000 +/- 0.000,1.000 +/- 0.000
+Patient vs Control,Site-Stratified 5-Fold,No,1.000 +/- 0.000,1.000 +/- 0.000
+Patient vs Control,Site-Stratified 5-Fold,Yes,1.000 +/- 0.000,1.000 +/- 0.000
+Patient vs Control,Leave-One-Site-Out,No,0.108 +/- 0.013,0.078 +/- 0.006
+Patient vs Control,Leave-One-Site-Out,Yes,1.000 +/- 0.000,1.000 +/- 0.000
