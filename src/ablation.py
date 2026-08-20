@@ -74,23 +74,7 @@ def get_ablation_subsets(features):
 
 
 def compute_ece(y_true, y_prob, n_bins=10):
-    """
-    Compute Expected Calibration Error (ECE).
-
-    Parameters
-    ----------
-    y_true : array-like
-        Binary ground truth labels (0 or 1).
-    y_prob : array-like
-        Predicted probabilities.
-    n_bins : int
-        Number of calibration bins.
-
-    Returns
-    -------
-    float
-        Expected Calibration Error.
-    """
+    """Compute Expected Calibration Error (ECE)."""
     bins = np.linspace(0, 1, n_bins + 1)
     binids = np.digitize(y_prob, bins) - 1
     ece = 0.0
@@ -104,29 +88,7 @@ def compute_ece(y_true, y_prob, n_bins=10):
 
 
 def bootstrap_metric_ci(y_true, y_pred, metric_fn, n_iter=2000, ci=95, seed=41):
-    """
-    Compute bootstrap confidence interval for a metric function.
-
-    Parameters
-    ----------
-    y_true : np.ndarray
-        True binary labels.
-    y_pred : np.ndarray
-        Predicted continuous scores/probabilities.
-    metric_fn : callable
-        Metric function taking (y_true, y_pred).
-    n_iter : int
-        Number of bootstrap iterations.
-    ci : float
-        Confidence interval percentage (e.g. 95).
-    seed : int
-        Random seed.
-
-    Returns
-    -------
-    tuple
-        (point_estimate, ci_lower, ci_upper, boot_samples)
-    """
+    """Compute bootstrap confidence interval for a metric function."""
     rng = np.random.RandomState(seed)
     point_est = float(metric_fn(y_true, y_pred))
     boot_samples = []
@@ -144,9 +106,9 @@ def bootstrap_metric_ci(y_true, y_pred, metric_fn, n_iter=2000, ci=95, seed=41):
     return point_est, ci_lower, ci_upper, boot_samples
 
 
-def build_nn_classifier(input_dim, task='pvc'):
+def build_nn_classifier(input_dim, task='pvc', y_train=None):
     """
-    Build standard sequential neural network matching manuscript specifications.
+    Build neural network matching manuscript specifications for each task.
 
     Parameters
     ----------
@@ -154,10 +116,13 @@ def build_nn_classifier(input_dim, task='pvc'):
         Number of input features.
     task : str
         'pvc' (Patient vs Control) or 'scz' (SCZ vs Non-SCZ).
+    y_train : array-like, optional
+        Training fold labels for calculating class weights.
 
     Returns
     -------
-    keras.Model
+    tuple
+        (keras.Model, dict of class weights)
     """
     if task == 'pvc':
         model = keras.Sequential([
@@ -168,17 +133,24 @@ def build_nn_classifier(input_dim, task='pvc'):
             layers.Dropout(0.4),
             layers.Dense(1, activation='sigmoid')
         ])
+        if y_train is not None:
+            cw = class_weight.compute_class_weight('balanced', classes=np.unique(y_train), y=y_train)
+            class_weight_dict = dict(zip(np.unique(y_train), cw))
+        else:
+            class_weight_dict = None
     else:  # SCZ vs Non-SCZ
         model = keras.Sequential([
             layers.Input(shape=(input_dim,)),
-            layers.Dense(64, activation='relu', kernel_regularizer=keras.regularizers.L2(0.1)),
-            layers.Dense(32, activation='relu', kernel_regularizer=keras.regularizers.L2(0.1)),
-            layers.Dense(16, activation='relu', kernel_regularizer=keras.regularizers.L2(0.1)),
-            layers.Dropout(0.4),
+            layers.Dense(64, activation='relu'),
+            layers.Dropout(0.3),
+            layers.Dense(32, activation='relu'),
+            layers.Dropout(0.2),
             layers.Dense(1, activation='sigmoid')
         ])
+        class_weight_dict = {0: 1.0, 1: 1.3}
+
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-    return model
+    return model, class_weight_dict
 
 
 def run_nested_cv_ablation(
@@ -194,41 +166,20 @@ def run_nested_cv_ablation(
 ):
     """
     Execute site-stratified K-fold nested CV with within-fold feature selection.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame containing harmonized features and diagnostic/site metadata.
-    feature_subset : list of str
-        Features available for this model configuration.
-    diag_col : str
-        Target column ('diag_pvc' or 'diag_scz').
-    pos_label : str
-        Positive class label ('Patient' or 'SCZ').
-    task_name : str
-        'pvc' or 'scz'.
-    top_k : int
-        Maximum number of features to select within fold.
-    k_folds : int
-        Number of cross-validation folds.
-    seed : int
-        Random seed for fold splitting.
-    site_col : str
-        Column containing scan site text.
-
-    Returns
-    -------
-    dict
-        Dictionary containing all predictions, fold metrics, pooled metrics, and feature selections.
     """
     set_seed(41)
     df_task = df[df[diag_col] != 'Remove'].copy()
     y = (df_task[diag_col] == pos_label).astype(int).values
     sites = df_task[site_col].astype(str).values
 
-    # Strata for site-stratified splitting
+    # Check site-strata feasibility
     strata = sites + '_' + y.astype(str)
-    splitter = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=seed)
+    if pd.Series(strata).value_counts().min() < k_folds:
+        splitter = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=seed)
+        splits = list(splitter.split(df_task[feature_subset], y))
+    else:
+        splitter = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=seed)
+        splits = list(splitter.split(df_task[feature_subset], strata))
 
     all_y_true = []
     all_y_nn = []
@@ -243,7 +194,7 @@ def run_nested_cv_ablation(
 
     k_to_select = min(top_k, len(feature_subset))
 
-    for fold, (train_idx, test_idx) in enumerate(splitter.split(df_task[feature_subset], strata), 1):
+    for fold, (train_idx, test_idx) in enumerate(splits, 1):
         X_train_full = df_task[feature_subset].iloc[train_idx]
         y_train = y[train_idx]
         X_test_full = df_task[feature_subset].iloc[test_idx]
@@ -259,7 +210,6 @@ def run_nested_cv_ablation(
                 pass
 
         if len(fold_feat_aucs) == 0:
-            # Fallback if AUC fails
             top_feats = feature_subset[:k_to_select]
         else:
             auc_df = pd.DataFrame(fold_feat_aucs)
@@ -277,11 +227,17 @@ def run_nested_cv_ablation(
         X_test_scaled = scaler.transform(X_test)
 
         # ---- Neural Network ----
-        model = build_nn_classifier(input_dim=X_train_scaled.shape[1], task=task_name)
-        cw = class_weight.compute_class_weight('balanced', classes=np.unique(y_train), y=y_train)
-        class_weight_dict = dict(zip(np.unique(y_train), cw))
+        model, cw_dict = build_nn_classifier(
+            input_dim=X_train_scaled.shape[1],
+            task=task_name,
+            y_train=y_train
+        )
 
-        early_stop = callbacks.EarlyStopping(monitor='val_loss', patience=40, restore_best_weights=True)
+        early_stop = callbacks.EarlyStopping(
+            monitor='val_loss',
+            patience=50,
+            restore_best_weights=True
+        )
         X_t, X_v, y_t, y_v = train_test_split(
             X_train_scaled, y_train, test_size=0.2, stratify=y_train, random_state=42
         )
@@ -289,18 +245,18 @@ def run_nested_cv_ablation(
         model.fit(
             X_t, y_t,
             validation_data=(X_v, y_v),
-            epochs=150,
+            epochs=100 if task_name == 'scz' else 150,
             batch_size=32,
             verbose=0,
             callbacks=[early_stop],
-            class_weight=class_weight_dict
+            class_weight=cw_dict
         )
         y_pred_nn = model.predict(X_test_scaled, verbose=0).flatten()
 
         # ---- Random Forest Baseline ----
         rf = RandomForestClassifier(
-            n_estimators=100,
-            max_depth=6,
+            n_estimators=50 if task_name == 'scz' else 100,
+            max_depth=4 if task_name == 'scz' else 6,
             class_weight='balanced',
             random_state=41,
             n_jobs=-1
@@ -403,18 +359,6 @@ def run_nested_cv_ablation(
 def compare_ablation_models(ablation_results, reference_name='Full Integrated'):
     """
     Perform statistical significance testing of each ablation model against the reference model.
-
-    Parameters
-    ----------
-    ablation_results : dict
-        Dictionary of results from `run_nested_cv_ablation` keyed by model configuration name.
-    reference_name : str
-        Name of reference model (default: 'Full Integrated').
-
-    Returns
-    -------
-    pd.DataFrame
-        Summary table comparing metrics and statistical difference (paired t-test and bootstrap Delta AUC).
     """
     ref_res = ablation_results[reference_name]
     ref_fold_aucs = ref_res['nn']['fold_aucs']
@@ -430,16 +374,12 @@ def compare_ablation_models(ablation_results, reference_name='Full Integrated'):
         # Delta AUC
         delta_auc = nn['pooled_auc'] - ref_res['nn']['pooled_auc']
 
-        # Paired t-test across folds
         if model_name == reference_name:
             t_pval = 1.0
             p_boot = 1.0
             delta_ci = (0.0, 0.0)
         else:
-            # Paired t-test on 5 fold AUCs
             t_stat, t_pval = stats.ttest_rel(fold_aucs, ref_fold_aucs)
-
-            # Paired bootstrap for Delta AUC
             rng = np.random.RandomState(41)
             delta_boots = []
             n = len(y_true)
@@ -452,7 +392,6 @@ def compare_ablation_models(ablation_results, reference_name='Full Integrated'):
                 delta_boots.append(a_model - a_ref)
             delta_boots = np.array(delta_boots)
             delta_ci = (float(np.percentile(delta_boots, 2.5)), float(np.percentile(delta_boots, 97.5)))
-            # Two-tailed bootstrap p-value against 0
             p_boot = 2.0 * min(np.mean(delta_boots <= 0), np.mean(delta_boots >= 0))
             p_boot = min(p_boot, 1.0)
 
